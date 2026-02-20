@@ -139,6 +139,23 @@ ZEROBITCH_BRANCH=main \
 bash scripts/install-on-openclaw.sh
 ```
 
+### Post-install smoke test
+
+Run these 3 quick checks right after install:
+
+```bash
+# 1) Service/container is up
+cd /opt/zerobitch-fleet && docker compose ps
+
+# 2) Health endpoint responds OK
+curl -fsS http://127.0.0.1:4100/health
+
+# 3) Agents API responds
+curl -fsS http://127.0.0.1:4100/api/agents
+```
+
+If your host port is not `4100`, replace it in the curl commands.
+
 ## License
 
 MIT
