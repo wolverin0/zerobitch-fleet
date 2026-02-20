@@ -1,5 +1,7 @@
 # ZeroBitch Fleet
 
+![ZeroBitch Fleet](assets/zerobitch-crab.jpg)
+
 Standalone fleet manager for ZeroClaw instances.
 
 ## What it does
