@@ -1,0 +1,6 @@
+host: 0.0.0.0
+port: 8080
+debug: false
+adapter: docker
+db_path: ./data/zerobitch.db
+poll_interval_sec: 15

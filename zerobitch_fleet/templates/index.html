@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ZeroBitch Fleet</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="noise"></div>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">ZeroClaw Operations</p>
+      <h1>ZeroBitch Fleet</h1>
+      <p class="subtitle">Standalone fleet control for ZeroClaw agents</p>
+    </div>
+    <div class="adapter-pill">
+      <span>Adapter</span>
+      <strong id="adapter-name">{{ adapter_name }}</strong>
+    </div>
+  </header>
+
+  <section class="metrics">
+    <div class="metric-card">
+      <p>Total Agents</p>
+      <h2 id="metric-total">0</h2>
+      <span class="metric-meta" id="metric-last">Waiting for telemetry</span>
+    </div>
+    <div class="metric-card">
+      <p>Running</p>
+      <h2 id="metric-running">0</h2>
+      <span class="metric-meta">Active and healthy</span>
+    </div>
+    <div class="metric-card">
+      <p>Stopped</p>
+      <h2 id="metric-stopped">0</h2>
+      <span class="metric-meta">Parked or drained</span>
+    </div>
+    <div class="metric-card">
+      <p>Errors</p>
+      <h2 id="metric-error">0</h2>
+      <span class="metric-meta">Needs attention</span>
+    </div>
+    <div class="metric-card">
+      <p>RAM Load</p>
+      <h2 id="metric-ram">0 / 0 MB</h2>
+      <span class="metric-meta">Fleet footprint</span>
+    </div>
+  </section>
+
+  <section class="toolbar">
+    <div class="toolbar-left">
+      <label class="select-all">
+        <input id="select-all" type="checkbox" />
+        <span>Select all</span>
+      </label>
+      <span id="selected-count">0 selected</span>
+    </div>
+    <div class="toolbar-actions">
+      <button class="ghost" data-batch="start">Start</button>
+      <button class="ghost" data-batch="stop">Stop</button>
+      <button class="ghost" data-batch="restart">Restart</button>
+      <button class="danger" data-batch="delete">Delete</button>
+    </div>
+  </section>
+
+  <section class="grid" id="agent-grid"></section>
+
+  <section class="empty-state" id="empty-state">
+    <h3>No agents registered</h3>
+    <p>Once an adapter feeds inventory, cards will populate here.</p>
+  </section>
+
+  <div class="modal" id="logs-modal" aria-hidden="true">
+    <div class="modal-content">
+      <header>
+        <div>
+          <h3>Agent Logs</h3>
+          <p id="logs-agent">Loading</p>
+        </div>
+        <button id="logs-close" aria-label="Close">Close</button>
+      </header>
+      <div class="modal-controls">
+        <label>
+          Tail
+          <input id="logs-tail" type="number" min="10" max="500" value="200" />
+        </label>
+        <button id="logs-refresh">Refresh</button>
+      </div>
+      <pre id="logs-output">Loading logs...</pre>
+    </div>
+  </div>
+
+  <script>
+    window.__ZEROBITCH_POLL_INTERVAL__ = {{ poll_interval_sec | tojson }};
+  </script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
