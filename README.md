@@ -103,6 +103,8 @@ ClawTrol endpoints used (best-effort):
 - `PATCH /api/agents/{id}/template`
 - `POST /api/agents/{id}/task`
 
+Detailed control-panel wiring and smoke examples: `docs/control-panel-api.md`.
+
 ## Security notes
 
 - No authentication or authorization is built in.
@@ -124,37 +126,66 @@ ClawTrol endpoints used (best-effort):
 - Multi-cluster aggregation and labeling
 - Webhook/event ingestion
 
-## OpenClaw one-liner installer
+## OpenClaw auto-install (remote instance)
+
+Canonical standalone URL is:
+
+- `http://<host>:4100`
+
+By default, Docker Compose maps host `4100` -> container `8080`. Keep `4100` as the canonical exposed port for standalone deployments.
+
+### One-liner installer
+
+Run on the target host:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/wolverin0/zerobitch-fleet/main/scripts/install-on-openclaw.sh | bash
 ```
 
-Environment overrides:
+### Environment overrides
+
+Use these when you need a custom repo/folder/branch/health URL:
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/wolverin0/zerobitch-fleet/main/scripts/install-on-openclaw.sh | \
 ZEROBITCH_REPO_URL=https://github.com/wolverin0/zerobitch-fleet.git \
 ZEROBITCH_INSTALL_DIR=/opt/zerobitch-fleet \
 ZEROBITCH_BRANCH=main \
-bash scripts/install-on-openclaw.sh
+ZEROBITCH_HEALTH_URL=http://127.0.0.1:4100/health \
+bash
 ```
 
-### Post-install smoke test
+### Post-install smoke tests
 
-Run these 3 quick checks right after install:
+Run these right after install:
 
 ```bash
-# 1) Service/container is up
+# 1) Container is up and port 4100 is bound
 cd /opt/zerobitch-fleet && docker compose ps
 
-# 2) Health endpoint responds OK
+# 2) Health endpoint responds
 curl -fsS http://127.0.0.1:4100/health
 
-# 3) Agents API responds
+# 3) Metrics API responds
+curl -fsS http://127.0.0.1:4100/api/metrics
+
+# 4) Agents API responds
 curl -fsS http://127.0.0.1:4100/api/agents
 ```
 
-If your host port is not `4100`, replace it in the curl commands.
+If you intentionally remap host ports, update URLs accordingly. Container port remains `8080`.
+
+## Control panel behavior and API mapping
+
+UI actions are wired to these backend endpoints:
+
+- Dashboard refresh loop → `POST /api/agents/refresh`, `GET /api/metrics`, `GET /api/agents`
+- Per-agent logs modal → `GET /api/agents/{id}/logs?tail=<n>`
+- Send task button (dry/mock in docker/none adapters) → `POST /api/agents/{id}/task`
+- Save template button → `PATCH /api/agents/{id}/template`
+- Start/Stop/Restart/Delete buttons (single + batch) → `POST /api/actions`
+
+This keeps frontend behavior and API contract aligned for production usage.
 
 ## License
 
