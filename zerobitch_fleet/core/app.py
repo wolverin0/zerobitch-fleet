@@ -74,7 +74,7 @@ def create_app() -> Flask:
     @app.get("/api/agents")
     def api_agents():
         conn = get_conn()
-        agents = db.list_agents(conn)
+        agents = [_serialize_agent(agent) for agent in db.list_agents(conn)]
         return jsonify({"agents": agents})
 
     @app.post("/api/agents/refresh")
@@ -94,10 +94,12 @@ def create_app() -> Flask:
     @app.get("/api/metrics")
     def api_metrics():
         conn = get_conn()
-        agents = db.list_agents(conn)
+        agents = [_serialize_agent(agent) for agent in db.list_agents(conn)]
         counts = _compute_counts(agents)
-        ram_used = sum(agent["ram_used_mb"] for agent in agents)
-        ram_limit = sum(agent["ram_limit_mb"] for agent in agents)
+        used_values = [agent["ram_used_mb"] for agent in agents if agent.get("ram_used_mb") is not None]
+        limit_values = [agent["ram_limit_mb"] for agent in agents if agent.get("ram_limit_mb") is not None]
+        ram_used = sum(used_values) if used_values else None
+        ram_limit = sum(limit_values) if limit_values else None
         return jsonify(
             {
                 "counts": counts,
@@ -164,7 +166,7 @@ def create_app() -> Flask:
         result = adapter.send_task(agent_id, task)
         if result.ok and adapter.name != "none":
             db.insert_log(conn, agent_id, f"Task queued: {task}")
-            db.update_agent(conn, agent_id, {"last_activity_ts": int(time.time())})
+            db.update_agent(conn, agent_id, {"last_activity_ts": int(time.time()), "last_activity_state": "event"})
         return jsonify({"ok": result.ok, "message": result.message})
 
     return app
@@ -179,6 +181,21 @@ def _compute_counts(agents: List[Dict]) -> Dict[str, int]:
         else:
             counts["other"] += 1
     return counts
+
+
+def _serialize_agent(agent: Dict) -> Dict:
+    payload = dict(agent)
+    if payload.get("ram_used_state") != "real":
+        payload["ram_used_mb"] = None
+    if payload.get("ram_limit_state") != "real":
+        payload["ram_limit_mb"] = None
+    if payload.get("last_activity_state") == "unavailable":
+        payload["last_activity_ts"] = None
+    if not payload.get("model"):
+        payload["model"] = "unknown"
+    if payload.get("template_state") == "unknown" and not payload.get("template"):
+        payload["template"] = ""
+    return payload
 
 
 def _post_process_action(
@@ -198,7 +215,7 @@ def _post_process_action(
         db.delete_agent(conn, agent_id)
         return
 
-    updates = {"last_activity_ts": int(time.time())}
+    updates = {"last_activity_ts": int(time.time()), "last_activity_state": "event"}
     if action == "start":
         updates["status"] = "running"
     elif action == "stop":

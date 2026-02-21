@@ -18,7 +18,7 @@ class NoneAdapter:
         if not agent:
             return ActionResult(ok=False, message="agent not found")
 
-        updates: Dict = {"last_activity_ts": int(time.time())}
+        updates: Dict = {"last_activity_ts": int(time.time()), "last_activity_state": "event"}
         if action == "start":
             updates["status"] = "running"
         elif action == "stop":
@@ -43,7 +43,7 @@ class NoneAdapter:
         if not agent:
             return ActionResult(ok=False, message="agent not found")
         db.insert_log(self.conn, agent_id, f"Task queued: {task}")
-        db.update_agent(self.conn, agent_id, {"last_activity_ts": int(time.time())})
+        db.update_agent(self.conn, agent_id, {"last_activity_ts": int(time.time()), "last_activity_state": "event"})
         return ActionResult(ok=True, message="task queued")
 
     def refresh_agents(self) -> RefreshResult:
@@ -55,7 +55,7 @@ class NoneAdapter:
                 continue
             last_ts = agent.get("last_activity_ts") or now
             delta = max(0, now - last_ts)
-            updates: Dict = {"last_activity_ts": now}
+            updates: Dict = {"last_activity_ts": now, "last_activity_state": "synthetic"}
             if delta:
                 updates["uptime_sec"] = agent.get("uptime_sec", 0) + delta
             ram_used = agent.get("ram_used_mb", 0)

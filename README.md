@@ -92,6 +92,30 @@ ClawTrol endpoints used (best-effort):
 - `POST {CLAWTROL_API_URL}/agents/{id}/tasks`
 - `POST {CLAWTROL_API_URL}/agents/{id}/actions`
 
+## Reality guarantees
+
+ZeroBitch Fleet now exposes telemetry provenance explicitly:
+
+- `ram_limit_mb`
+  - `real`: from Docker `HostConfig.Memory` (bytes → MB)
+  - `unlimited`: Docker reports `0`, API returns `null`
+  - `unavailable`: no inspect value available, API returns `null`
+- `ram_used_mb`
+  - `real`: from Docker stats API (`/containers/{id}/stats?stream=false`)
+  - `unavailable`: stats not available, API returns `null`
+- `last_activity_ts`
+  - `log`: most recent real Docker log timestamp when present
+  - `event`: container lifecycle timestamps (start/finish) when logs are absent
+  - `unavailable`: API returns `null`
+- `model`
+  - resolved from container env/labels when available
+  - otherwise explicit `"unknown"` (never fake model defaults)
+- `template`
+  - resolved from container labels when available
+  - otherwise empty string with `template_state="unknown"` (never fake default template text)
+
+Contract fields `ram_used_state`, `ram_limit_state`, `last_activity_state`, and `template_state` are included so UI/API consumers can differentiate real vs unavailable values.
+
 ## API endpoints
 
 - `GET /health`

@@ -4,7 +4,8 @@ import json
 import os
 import socket
 import time
-from typing import Dict, List
+from datetime import datetime
+from typing import Dict, List, Optional
 from urllib.parse import quote
 
 from zerobitch_fleet.adapters.base import ActionResult, FleetAdapter, RefreshResult
@@ -27,7 +28,7 @@ class DockerAdapter:
         if not agent:
             return ActionResult(ok=False, message="agent not found")
         db.insert_log(self.conn, agent_id, f"Mock dispatch queued: {task}")
-        db.update_agent(self.conn, agent_id, {"last_activity_ts": int(time.time())})
+        db.update_agent(self.conn, agent_id, {"last_activity_ts": int(time.time()), "last_activity_state": "event"})
         return ActionResult(ok=True, message="mock task accepted (no container mutation)")
 
     def refresh_agents(self) -> RefreshResult:
@@ -42,6 +43,12 @@ class DockerAdapter:
             agent_id = c["name"]
             seen_ids.append(agent_id)
             status = _normalize_status(c.get("state", ""))
+            mem_limit_mb, mem_limit_state = _memory_limit_mb(c.get("inspect"))
+            mem_used_mb, mem_used_state = _memory_used_mb(c.get("stats"))
+            last_ts, last_state = _resolve_last_activity(c)
+            template = _detect_template(c.get("inspect"))
+            model = _detect_model(c.get("inspect"))
+
             db.upsert_agent(
                 self.conn,
                 {
@@ -49,15 +56,20 @@ class DockerAdapter:
                     "name": agent_id,
                     "status": status,
                     "restart_count": c.get("restart_count", 0),
-                    "ram_used_mb": _estimate_ram_used(status),
-                    "ram_limit_mb": 1024,
+                    "ram_used_mb": mem_used_mb if mem_used_mb is not None else 0,
+                    "ram_limit_mb": mem_limit_mb if mem_limit_mb is not None else 0,
+                    "ram_used_state": mem_used_state,
+                    "ram_limit_state": mem_limit_state,
                     "uptime_sec": max(0, now - c.get("started_at", now)),
-                    "last_activity_ts": now,
+                    "last_activity_ts": last_ts or now,
+                    "last_activity_state": last_state,
                     "observability_backend": "docker",
                     "observability_details": f"container:{c.get('short_id', '')}",
                     "cron_native": "n/a",
                     "cron_registry": "n/a",
-                    "template": "# managed by docker adapter\n",
+                    "model": model,
+                    "template": template,
+                    "template_state": "configured" if template else "unknown",
                 },
             )
 
@@ -78,10 +90,10 @@ class DockerAdapter:
         for line in body.splitlines():
             if not line.strip():
                 continue
-            # docker logs timestamps are RFC3339 at line prefix when timestamps=1
             parts = line.split(" ", 1)
+            ts = _parse_rfc3339_to_epoch(parts[0]) if parts else int(time.time())
             msg = parts[1] if len(parts) == 2 else line
-            logs.append({"ts": int(time.time()), "line": msg})
+            logs.append({"ts": ts, "line": msg})
         return logs[-tail:]
 
 
@@ -100,17 +112,102 @@ def _list_zeroclaw_containers() -> List[Dict]:
         name = names[0].lstrip("/")
         if not name.startswith("zeroclaw-"):
             continue
+
+        inspect = _docker_get_json(f"/containers/{quote(name, safe='')}/json")
+        stats = _docker_get_json(f"/containers/{quote(name, safe='')}/stats?stream=false")
         state = (row.get("State") or "").lower()
+
         items.append(
             {
                 "name": name,
                 "state": state,
                 "short_id": (row.get("Id") or "")[:12],
-                "started_at": _parse_iso_to_epoch(row.get("State") and row.get("Created")),
-                "restart_count": row.get("RestartCount", 0) or 0,
+                "started_at": _parse_rfc3339_to_epoch(((inspect or {}).get("State") or {}).get("StartedAt")),
+                "restart_count": ((inspect or {}).get("RestartCount") or 0),
+                "inspect": inspect,
+                "stats": stats,
+                "last_log_ts": _latest_log_ts(name),
             }
         )
     return items
+
+
+def _latest_log_ts(container_name: str) -> Optional[int]:
+    try:
+        body = _docker_get(
+            f"/containers/{quote(container_name, safe='')}/logs?stdout=1&stderr=1&timestamps=1&tail=1"
+        )
+    except RuntimeError:
+        return None
+    lines = [line for line in body.splitlines() if line.strip()]
+    if not lines:
+        return None
+    ts = lines[-1].split(" ", 1)[0]
+    return _parse_rfc3339_to_epoch(ts)
+
+
+def _docker_get_json(path: str) -> Optional[Dict]:
+    try:
+        body = _docker_get(path)
+        return json.loads(body)
+    except Exception:
+        return None
+
+
+def _memory_limit_mb(inspect: Optional[Dict]) -> tuple[Optional[float], str]:
+    memory = (((inspect or {}).get("HostConfig") or {}).get("Memory"))
+    if memory in (None, ""):
+        return None, "unavailable"
+    try:
+        memory = int(memory)
+    except Exception:
+        return None, "unavailable"
+    if memory == 0:
+        return None, "unlimited"
+    return round(memory / (1024 * 1024), 2), "real"
+
+
+def _memory_used_mb(stats: Optional[Dict]) -> tuple[Optional[float], str]:
+    usage = (((stats or {}).get("memory_stats") or {}).get("usage"))
+    if usage in (None, ""):
+        return None, "unavailable"
+    try:
+        return round(float(usage) / (1024 * 1024), 2), "real"
+    except Exception:
+        return None, "unavailable"
+
+
+def _resolve_last_activity(container: Dict) -> tuple[Optional[int], str]:
+    log_ts = container.get("last_log_ts")
+    if log_ts:
+        return log_ts, "log"
+    state = ((container.get("inspect") or {}).get("State") or {})
+    candidates = [
+        _parse_rfc3339_to_epoch(state.get("FinishedAt")),
+        _parse_rfc3339_to_epoch(state.get("StartedAt")),
+    ]
+    candidates = [x for x in candidates if x]
+    if candidates:
+        return max(candidates), "event"
+    return None, "unavailable"
+
+
+def _detect_model(inspect: Optional[Dict]) -> Optional[str]:
+    envs = ((inspect or {}).get("Config") or {}).get("Env") or []
+    for env in envs:
+        if env.startswith("MODEL="):
+            return env.split("=", 1)[1] or None
+    labels = ((inspect or {}).get("Config") or {}).get("Labels") or {}
+    for key in ("model", "ai.model", "zeroclaw.model"):
+        if labels.get(key):
+            return labels.get(key)
+    return "unknown"
+
+
+def _detect_template(inspect: Optional[Dict]) -> str:
+    labels = ((inspect or {}).get("Config") or {}).get("Labels") or {}
+    value = labels.get("zeroclaw.template") or labels.get("template")
+    return value or ""
 
 
 def _docker_get(path: str) -> str:
@@ -153,16 +250,13 @@ def _normalize_status(state: str) -> str:
     return "other"
 
 
-def _estimate_ram_used(status: str) -> float:
-    return 256 if status == "running" else (64 if status == "error" else 0)
-
-
-def _parse_iso_to_epoch(value) -> int:
-    # Fallback: container Created field is epoch seconds in Docker API.
+def _parse_rfc3339_to_epoch(value) -> Optional[int]:
+    if not value or str(value).startswith("0001-01-01"):
+        return None
     try:
-        return int(value)
+        return int(datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp())
     except Exception:
-        return int(time.time())
+        return None
 
 
 def create_adapter(conn) -> FleetAdapter:

@@ -14,13 +14,18 @@ CREATE TABLE IF NOT EXISTS agents (
     restart_count INTEGER NOT NULL,
     ram_used_mb REAL NOT NULL,
     ram_limit_mb REAL NOT NULL,
+    ram_used_state TEXT NOT NULL DEFAULT 'inferred',
+    ram_limit_state TEXT NOT NULL DEFAULT 'inferred',
     uptime_sec INTEGER NOT NULL,
     last_activity_ts INTEGER NOT NULL,
+    last_activity_state TEXT NOT NULL DEFAULT 'synthetic',
     observability_backend TEXT NOT NULL,
     observability_details TEXT NOT NULL,
     cron_native TEXT NOT NULL,
     cron_registry TEXT NOT NULL,
-    template TEXT NOT NULL
+    model TEXT,
+    template TEXT NOT NULL,
+    template_state TEXT NOT NULL DEFAULT 'configured'
 );
 
 CREATE TABLE IF NOT EXISTS logs (
@@ -33,6 +38,15 @@ CREATE TABLE IF NOT EXISTS logs (
 """
 
 
+DEFAULT_AGENT_FIELDS = {
+    "ram_used_state": "inferred",
+    "ram_limit_state": "inferred",
+    "last_activity_state": "synthetic",
+    "model": None,
+    "template_state": "configured",
+}
+
+
 SEED_AGENTS = [
     {
         "id": "zb-alpha",
@@ -41,13 +55,18 @@ SEED_AGENTS = [
         "restart_count": 2,
         "ram_used_mb": 256,
         "ram_limit_mb": 512,
+        "ram_used_state": "inferred",
+        "ram_limit_state": "inferred",
         "uptime_sec": 86400,
         "last_activity_ts": int(time.time()) - 120,
+        "last_activity_state": "event",
         "observability_backend": "prometheus",
         "observability_details": "prometheus://metrics/zb-alpha",
         "cron_native": "0 */6 * * *",
         "cron_registry": "sync-registry@hourly",
+        "model": "unknown",
         "template": "# Default template for zb-alpha\nmode: proactive\n",
+        "template_state": "configured",
     },
     {
         "id": "zb-bravo",
@@ -56,13 +75,18 @@ SEED_AGENTS = [
         "restart_count": 0,
         "ram_used_mb": 0,
         "ram_limit_mb": 512,
+        "ram_used_state": "inferred",
+        "ram_limit_state": "inferred",
         "uptime_sec": 0,
         "last_activity_ts": int(time.time()) - 7200,
+        "last_activity_state": "event",
         "observability_backend": "none",
         "observability_details": "offline",
         "cron_native": "30 2 * * *",
         "cron_registry": "registry-refresh@daily",
+        "model": "unknown",
         "template": "# Default template for zb-bravo\nmode: standby\n",
+        "template_state": "configured",
     },
     {
         "id": "zb-charlie",
@@ -71,13 +95,18 @@ SEED_AGENTS = [
         "restart_count": 7,
         "ram_used_mb": 384,
         "ram_limit_mb": 512,
+        "ram_used_state": "inferred",
+        "ram_limit_state": "inferred",
         "uptime_sec": 3600,
         "last_activity_ts": int(time.time()) - 30,
+        "last_activity_state": "event",
         "observability_backend": "grafana",
         "observability_details": "grafana://dashboards/zb-charlie",
         "cron_native": "*/15 * * * *",
         "cron_registry": "registry-sync@15m",
+        "model": "unknown",
         "template": "# Default template for zb-charlie\nmode: auto-heal\n",
+        "template_state": "configured",
     },
 ]
 
@@ -100,7 +129,22 @@ def connect(db_path: str) -> sqlite3.Connection:
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _migrate_agents_table(conn)
     conn.commit()
+
+
+def _migrate_agents_table(conn: sqlite3.Connection) -> None:
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(agents)").fetchall()}
+    add_columns = {
+        "ram_used_state": "ALTER TABLE agents ADD COLUMN ram_used_state TEXT NOT NULL DEFAULT 'inferred'",
+        "ram_limit_state": "ALTER TABLE agents ADD COLUMN ram_limit_state TEXT NOT NULL DEFAULT 'inferred'",
+        "last_activity_state": "ALTER TABLE agents ADD COLUMN last_activity_state TEXT NOT NULL DEFAULT 'synthetic'",
+        "model": "ALTER TABLE agents ADD COLUMN model TEXT",
+        "template_state": "ALTER TABLE agents ADD COLUMN template_state TEXT NOT NULL DEFAULT 'configured'",
+    }
+    for name, ddl in add_columns.items():
+        if name not in cols:
+            conn.execute(ddl)
 
 
 def seed_db(conn: sqlite3.Connection) -> None:
@@ -109,30 +153,7 @@ def seed_db(conn: sqlite3.Connection) -> None:
     if count:
         return
     for agent in SEED_AGENTS:
-        conn.execute(
-            """
-            INSERT INTO agents (
-                id, name, status, restart_count, ram_used_mb, ram_limit_mb,
-                uptime_sec, last_activity_ts, observability_backend, observability_details,
-                cron_native, cron_registry, template
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                agent["id"],
-                agent["name"],
-                agent["status"],
-                agent["restart_count"],
-                agent["ram_used_mb"],
-                agent["ram_limit_mb"],
-                agent["uptime_sec"],
-                agent["last_activity_ts"],
-                agent["observability_backend"],
-                agent["observability_details"],
-                agent["cron_native"],
-                agent["cron_registry"],
-                agent["template"],
-            ),
-        )
+        upsert_agent(conn, agent)
     now = int(time.time())
     for agent_id, line in SEED_LOGS:
         conn.execute(
@@ -189,38 +210,46 @@ def get_logs(conn: sqlite3.Connection, agent_id: str, tail: int) -> List[Dict]:
 
 
 def upsert_agent(conn: sqlite3.Connection, agent: Dict) -> Optional[Dict]:
-    existing = get_agent(conn, agent["id"])
+    payload = dict(DEFAULT_AGENT_FIELDS)
+    payload.update(agent)
+    existing = get_agent(conn, payload["id"])
     if existing:
-        updates = dict(agent)
+        updates = dict(payload)
         updates.pop("id", None)
-        return update_agent(conn, agent["id"], updates)
+        return update_agent(conn, payload["id"], updates)
 
     conn.execute(
         """
         INSERT INTO agents (
             id, name, status, restart_count, ram_used_mb, ram_limit_mb,
-            uptime_sec, last_activity_ts, observability_backend, observability_details,
-            cron_native, cron_registry, template
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ram_used_state, ram_limit_state, uptime_sec, last_activity_ts,
+            last_activity_state, observability_backend, observability_details,
+            cron_native, cron_registry, model, template, template_state
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            agent["id"],
-            agent["name"],
-            agent["status"],
-            agent["restart_count"],
-            agent["ram_used_mb"],
-            agent["ram_limit_mb"],
-            agent["uptime_sec"],
-            agent["last_activity_ts"],
-            agent["observability_backend"],
-            agent["observability_details"],
-            agent["cron_native"],
-            agent["cron_registry"],
-            agent["template"],
+            payload["id"],
+            payload["name"],
+            payload["status"],
+            payload["restart_count"],
+            payload["ram_used_mb"],
+            payload["ram_limit_mb"],
+            payload["ram_used_state"],
+            payload["ram_limit_state"],
+            payload["uptime_sec"],
+            payload["last_activity_ts"],
+            payload["last_activity_state"],
+            payload["observability_backend"],
+            payload["observability_details"],
+            payload["cron_native"],
+            payload["cron_registry"],
+            payload["model"],
+            payload["template"],
+            payload["template_state"],
         ),
     )
     conn.commit()
-    return get_agent(conn, agent["id"])
+    return get_agent(conn, payload["id"])
 
 
 def delete_agents_with_prefix_not_in(conn: sqlite3.Connection, prefix: str, keep_ids: List[str]) -> None:

@@ -57,12 +57,17 @@ function formatRelative(ts) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+function formatMb(value) {
+  if (value === null || value === undefined) return "unavailable";
+  return `${Math.round(value)} MB`;
+}
+
 function updateMetrics(data) {
   metricTotal.textContent = data.counts.total;
   metricRunning.textContent = data.counts.running;
   metricStopped.textContent = data.counts.stopped;
   metricError.textContent = data.counts.error;
-  metricRam.textContent = `${Math.round(data.ram.used_mb)} / ${Math.round(data.ram.limit_mb)} MB`;
+  metricRam.textContent = `${formatMb(data.ram.used_mb)} / ${formatMb(data.ram.limit_mb)}`;
   const dt = new Date(data.ts * 1000);
   metricLast.textContent = `Updated ${dt.toLocaleTimeString()}`;
 }
@@ -82,7 +87,8 @@ function renderAgents() {
   emptyState.style.display = "none";
   const cards = state.agents
     .map((agent) => {
-      const percent = agent.ram_limit_mb
+      const hasRam = agent.ram_limit_mb !== null && agent.ram_used_mb !== null;
+      const percent = hasRam && agent.ram_limit_mb
         ? Math.min(100, Math.round((agent.ram_used_mb / agent.ram_limit_mb) * 100))
         : 0;
       const selected = state.selected.has(agent.id) ? "checked" : "";
@@ -98,14 +104,15 @@ function renderAgents() {
                 <span>ID: ${agent.id}</span>
                 <span>Restart: ${agent.restart_count}</span>
                 <span>Uptime: ${formatDuration(agent.uptime_sec)}</span>
-                <span>Last seen: ${formatRelative(agent.last_activity_ts)}</span>
+                <span>Last activity: ${formatRelative(agent.last_activity_ts)} (${agent.last_activity_state || "unknown"})</span>
               </div>
             </div>
             <span class="status ${agent.status}">${agent.status}</span>
           </header>
           <div>
             <div class="card-meta">
-              <span>RAM ${Math.round(agent.ram_used_mb)} / ${Math.round(agent.ram_limit_mb)} MB (${percent}%)</span>
+              <span>RAM ${formatMb(agent.ram_used_mb)} / ${formatMb(agent.ram_limit_mb)} (${hasRam ? `${percent}%` : "unknown"})</span>
+              <span>RAM source: used=${agent.ram_used_state || "unknown"}, limit=${agent.ram_limit_state || "unknown"}</span>
             </div>
             <div class="progress"><span style="width:${percent}%"></span></div>
           </div>
@@ -117,8 +124,12 @@ function renderAgents() {
             <span>Cron native: ${agent.cron_native}</span>
             <span>Cron registry: ${agent.cron_registry}</span>
           </div>
+          <div class="card-meta">
+            <span>Model: ${agent.model || "unknown"}</span>
+            <span>Template: ${agent.template_state || "unknown"}</span>
+          </div>
           <div class="template">
-            <textarea data-template-id="${agent.id}">${agent.template}</textarea>
+            <textarea data-template-id="${agent.id}" placeholder="template unavailable">${agent.template || ""}</textarea>
           </div>
           <div class="card-actions">
             <button class="ghost" data-action="start" data-agent-id="${agent.id}">Start</button>
