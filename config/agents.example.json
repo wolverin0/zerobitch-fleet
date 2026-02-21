@@ -1,0 +1,18 @@
+{
+  "agents": [
+    {
+      "id": "sentinel",
+      "name": "Sentinel",
+      "description": "Security monitor and telemetry guard",
+      "container": "zerobitch-sentinel",
+      "template": "See templates/dashboard/agent-template.md"
+    },
+    {
+      "id": "ops-watch",
+      "name": "Ops Watch",
+      "description": "Runtime and health watchdog for infra services",
+      "container": "zerobitch-ops-watch",
+      "template": "See templates/dashboard/agent-template.md"
+    }
+  ]
+}

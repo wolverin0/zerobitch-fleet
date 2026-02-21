@@ -3,11 +3,11 @@ services:
     image: node:20-alpine
     container_name: zerobitch-fleet
     working_dir: /app
-    command: ["sh", "-c", "npm install --no-audit --no-fund && npm run start"]
+    command: ["sh", "-c", "apk add --no-cache docker-cli >/dev/null && npm install --no-audit --no-fund && npm run start"]
     env_file:
       - .env
     ports:
-      - "4100:4100"
+      - "${PORT:-4100}:${PORT:-4100}"
     volumes:
       - ./:/app
       - /var/run/docker.sock:/var/run/docker.sock

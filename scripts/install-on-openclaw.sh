@@ -28,4 +28,5 @@ fi
 
 echo "✅ ZeroBitch Fleet installed"
 echo "Dashboard: http://localhost:4100"
-echo "Edit config: $TARGET/.env"
+echo "Environment: $TARGET/.env"
+echo "Agents config: $TARGET/config/agents.json"
