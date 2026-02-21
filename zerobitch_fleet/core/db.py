@@ -260,3 +260,13 @@ def delete_agents_with_prefix_not_in(conn: sqlite3.Connection, prefix: str, keep
         if agent_id in valid:
             continue
         delete_agent(conn, agent_id)
+
+
+def delete_agents_not_in(conn: sqlite3.Connection, keep_ids: List[str]) -> None:
+    rows = conn.execute("SELECT id FROM agents").fetchall()
+    valid = set(keep_ids)
+    for row in rows:
+        agent_id = row["id"]
+        if agent_id in valid:
+            continue
+        delete_agent(conn, agent_id)

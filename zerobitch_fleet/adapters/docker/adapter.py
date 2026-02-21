@@ -73,7 +73,7 @@ class DockerAdapter:
                 },
             )
 
-        db.delete_agents_with_prefix_not_in(self.conn, "zeroclaw-", seen_ids)
+        db.delete_agents_not_in(self.conn, seen_ids)
         return RefreshResult(ok=True, message="docker inventory refreshed", updated=len(containers))
 
     def tail_logs(self, agent_id: str, tail: int) -> List[Dict]:
@@ -91,7 +91,9 @@ class DockerAdapter:
             if not line.strip():
                 continue
             parts = line.split(" ", 1)
-            ts = _parse_rfc3339_to_epoch(parts[0]) if parts else int(time.time())
+            ts = _parse_rfc3339_to_epoch(parts[0]) if parts else None
+            if ts is None:
+                ts = int(time.time())
             msg = parts[1] if len(parts) == 2 else line
             logs.append({"ts": ts, "line": msg})
         return logs[-tail:]
@@ -254,7 +256,20 @@ def _parse_rfc3339_to_epoch(value) -> Optional[int]:
     if not value or str(value).startswith("0001-01-01"):
         return None
     try:
-        return int(datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp())
+        text = str(value).strip().replace("Z", "+00:00")
+        if "." in text:
+            head, tail = text.split(".", 1)
+            zone = ""
+            frac = tail
+            for marker in ("+", "-"):
+                idx = frac.find(marker)
+                if idx > 0:
+                    zone = frac[idx:]
+                    frac = frac[:idx]
+                    break
+            frac = frac[:6]
+            text = f"{head}.{frac}{zone}" if frac else f"{head}{zone}"
+        return int(datetime.fromisoformat(text).timestamp())
     except Exception:
         return None
 

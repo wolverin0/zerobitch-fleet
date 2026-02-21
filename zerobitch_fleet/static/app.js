@@ -63,13 +63,22 @@ function formatMb(value) {
 }
 
 function updateMetrics(data) {
-  metricTotal.textContent = data.counts.total;
-  metricRunning.textContent = data.counts.running;
-  metricStopped.textContent = data.counts.stopped;
-  metricError.textContent = data.counts.error;
-  metricRam.textContent = `${formatMb(data.ram.used_mb)} / ${formatMb(data.ram.limit_mb)}`;
-  const dt = new Date(data.ts * 1000);
-  metricLast.textContent = `Updated ${dt.toLocaleTimeString()}`;
+  const counts = data?.counts || { total: 0, running: 0, stopped: 0, error: 0 };
+  const ram = data?.ram || { used_mb: null, limit_mb: null };
+  const ts = data?.ts;
+
+  metricTotal.textContent = counts.total ?? 0;
+  metricRunning.textContent = counts.running ?? 0;
+  metricStopped.textContent = counts.stopped ?? 0;
+  metricError.textContent = counts.error ?? 0;
+  metricRam.textContent = `${formatMb(ram.used_mb)} / ${formatMb(ram.limit_mb)}`;
+
+  if (ts) {
+    const dt = new Date(ts * 1000);
+    metricLast.textContent = `Updated ${dt.toLocaleTimeString()}`;
+  } else {
+    metricLast.textContent = "Metrics unavailable";
+  }
 }
 
 function updateSelectedCount() {
@@ -151,24 +160,36 @@ function renderAgents() {
 }
 
 async function fetchMetrics() {
-  const res = await fetch("/api/metrics");
-  if (!res.ok) return;
-  const data = await res.json();
-  updateMetrics(data);
+  try {
+    const res = await fetch("/api/metrics");
+    if (!res.ok) return;
+    const data = await res.json();
+    updateMetrics(data);
+  } catch (error) {
+    console.error("metrics fetch failed", error);
+  }
 }
 
 async function fetchAgents() {
-  const res = await fetch("/api/agents");
-  if (!res.ok) return;
-  const data = await res.json();
-  state.agents = data.agents || [];
-  renderAgents();
+  try {
+    const res = await fetch("/api/agents");
+    if (!res.ok) return;
+    const data = await res.json();
+    state.agents = data.agents || [];
+    renderAgents();
+  } catch (error) {
+    console.error("agents fetch failed", error);
+  }
 }
 
 async function refreshAgents() {
-  const res = await fetch("/api/agents/refresh", { method: "POST" });
-  if (!res.ok) return;
-  await res.json();
+  try {
+    const res = await fetch("/api/agents/refresh", { method: "POST" });
+    if (!res.ok) return;
+    await res.json();
+  } catch (error) {
+    console.error("agents refresh failed", error);
+  }
 }
 
 async function invokeAction(agentIds, action) {
@@ -244,9 +265,17 @@ async function loadLogs() {
     .join("\n");
 }
 
+let refreshInFlight = false;
+
 async function refreshAll() {
-  await refreshAgents();
-  await Promise.all([fetchMetrics(), fetchAgents()]);
+  if (refreshInFlight) return;
+  refreshInFlight = true;
+  try {
+    await refreshAgents();
+    await Promise.all([fetchMetrics(), fetchAgents()]);
+  } finally {
+    refreshInFlight = false;
+  }
 }
 
 selectAll.addEventListener("change", () => {
