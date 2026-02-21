@@ -3,24 +3,23 @@
 ## Components
 
 1. Fleet API
-   - `/agents`
-   - `/agents/:id/status`
-   - `/agents/:id/logs`
-   - `/dispatch`
+   - `GET /api/health`
+   - `GET /api/agents`
+   - `GET /api/agents/:id/logs`
+   - `POST /api/agents/:id/dispatch`
+   - `PATCH /api/agents/:id/template`
 
 2. Dashboard UI
-   - Fleet overview
-   - Per-agent card (status, uptime, restart count)
-   - Prompt/template editor
+   - Fleet overview cards
+   - Logs viewer
+   - Dispatch form
+   - Template editor
 
-3. Adapters
-   - OpenClaw adapter
-   - ClawTrol adapter
-   - Pure mode adapter
+3. Storage
+   - `config/agents.json` for agent definitions
+   - `data/dispatches.json` for dispatch history
 
 ## Data model
 
-- agents
-- agent_templates
-- dispatch_history
-- health_samples
+- agents: id, name, description, container, template
+- dispatches: id, agentId, payload, createdAt

@@ -4,23 +4,13 @@
 
 Standalone fleet manager for ZeroClaw instances.
 
-## What it does
+## Features
 
-- Register and manage multiple ZeroClaw agents
-- Live status: running/stopped/restarting, uptime, restart count
-- Health checks and logs per instance
-- Dispatch tasks/prompts to agents
-- Optional adapters:
-  - OpenClaw adapter
-  - ClawTrol adapter
-  - Pure mode (no external dependency)
-
-## Architecture
-
-- **API**: lightweight manager service (REST)
-- **UI**: dashboard template inspired by `/zerobitch`
-- **Storage**: SQLite by default, PostgreSQL optional
-- **Runtime**: Docker Compose
+- Fleet dashboard with agent cards, status, uptime, and restart counts
+- Log tailing per agent (Docker socket required)
+- Dispatch workflow that stores events locally
+- Template editor persisted to `config/agents.json`
+- Simple REST API backing the UI
 
 ## Quickstart
 
@@ -33,7 +23,35 @@ docker compose up -d
 
 Open dashboard: `http://localhost:4100`
 
-## Auto-install on another OpenClaw host
+### Configure agents
+
+Edit `config/agents.json` and add agents:
+
+```json
+{
+  "agents": [
+    {
+      "id": "sentinel",
+      "name": "Sentinel",
+      "description": "Security monitor and telemetry guard",
+      "container": "zerobitch-sentinel",
+      "template": "You are Sentinel. Monitor and report anomalies."
+    }
+  ]
+}
+```
+
+## API
+
+- `GET /api/health`
+- `GET /api/agents`
+- `GET /api/agents/:id/logs?lines=200`
+- `POST /api/agents/:id/dispatch`
+- `PATCH /api/agents/:id/template`
+
+Dispatches are stored in `data/dispatches.json`.
+
+## Install on OpenClaw host
 
 One-liner:
 
@@ -41,27 +59,15 @@ One-liner:
 bash <(curl -fsSL https://raw.githubusercontent.com/wolverin0/zerobitch-fleet/main/scripts/install-on-openclaw.sh)
 ```
 
-Installer does:
-1. Clone repo to `~/.openclaw/workspace/zerobitch-fleet`
-2. Create `.env` from template
-3. Bring up stack with Docker Compose
-4. Print next-step config for OpenClaw integration
+The installer:
+1. Clones or updates the repo at `~/.openclaw/workspace/zerobitch-fleet`
+2. Creates `.env` from `.env.example`
+3. Starts the stack with Docker Compose
+4. Verifies the service is running
 
-## Modes
+## Screenshots
 
-- `MODE=pure`: ZeroClaw-only manager
-- `MODE=openclaw`: uses OpenClaw sessions/tooling
-- `MODE=clawtrol`: writes tasks/telemetry to ClawTrol APIs
-
-## Roadmap (MVP)
-
-- [x] Project scaffold + docs
-- [x] Dashboard template
-- [x] Compose stack + env template
-- [x] OpenClaw auto-install script
-- [ ] API implementation
-- [ ] UI wiring to API
-- [ ] Adapters implementation
+- Placeholder: add dashboard and logs screenshots here.
 
 ## License
 

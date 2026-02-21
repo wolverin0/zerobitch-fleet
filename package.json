@@ -1,0 +1,16 @@
+{
+  "name": "zerobitch-fleet",
+  "version": "0.1.0",
+  "description": "Standalone fleet manager for ZeroClaw instances.",
+  "main": "src/server.js",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "lint": "node --check src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

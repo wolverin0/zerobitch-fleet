@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ZeroBitch Fleet</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="backdrop"></div>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">ZeroBitch Fleet</p>
+        <h1>Agent status, logs, and dispatch in one console.</h1>
+        <p class="subhead">Track uptime, restart counts, and push instructions without leaving the dashboard.</p>
+      </div>
+      <div class="hero-card">
+        <div class="hero-row">
+          <div>
+            <p class="label">Docker socket</p>
+            <p id="dockerStatus" class="value">Checking...</p>
+          </div>
+          <div>
+            <p class="label">Last refresh</p>
+            <p id="lastRefresh" class="value">--</p>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button id="refreshButton" class="primary">Refresh now</button>
+          <button id="clearSelection" class="ghost">Clear selection</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="stats">
+      <div class="stat-card">
+        <p class="label">Total agents</p>
+        <p id="totalAgents" class="stat">0</p>
+      </div>
+      <div class="stat-card">
+        <p class="label">Running</p>
+        <p id="runningAgents" class="stat">0</p>
+      </div>
+      <div class="stat-card">
+        <p class="label">Restarting</p>
+        <p id="restartingAgents" class="stat">0</p>
+      </div>
+      <div class="stat-card">
+        <p class="label">Stopped</p>
+        <p id="stoppedAgents" class="stat">0</p>
+      </div>
+    </section>
+
+    <main>
+      <div class="section-head">
+        <h2>Fleet overview</h2>
+        <p id="overviewHint" class="hint">Select an agent card to see logs, dispatch, and templates.</p>
+      </div>
+      <div id="agentsGrid" class="grid"></div>
+    </main>
+
+    <aside id="agentPanel" class="panel" aria-hidden="true">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Selected agent</p>
+          <h3 id="panelTitle">No agent selected</h3>
+          <p id="panelMeta" class="hint"></p>
+        </div>
+        <button id="closePanel" class="ghost">Close</button>
+      </div>
+
+      <div class="panel-tabs">
+        <button class="tab active" data-tab="logs">Logs</button>
+        <button class="tab" data-tab="dispatch">Dispatch</button>
+        <button class="tab" data-tab="template">Template</button>
+      </div>
+
+      <div class="panel-body">
+        <section class="panel-section" data-section="logs">
+          <div class="panel-row">
+            <p class="label">Tail lines</p>
+            <div class="panel-actions">
+              <input id="logLines" type="number" min="1" max="1000" value="200" />
+              <button id="refreshLogs" class="primary">Load logs</button>
+            </div>
+          </div>
+          <pre id="logsOutput" class="logs">Select an agent to load logs.</pre>
+        </section>
+
+        <section class="panel-section" data-section="dispatch" hidden>
+          <p class="label">Dispatch message</p>
+          <textarea id="dispatchMessage" rows="6" placeholder="Give the agent an instruction or task."></textarea>
+          <div class="panel-actions">
+            <button id="sendDispatch" class="primary">Send dispatch</button>
+            <p id="dispatchStatus" class="hint"></p>
+          </div>
+        </section>
+
+        <section class="panel-section" data-section="template" hidden>
+          <p class="label">Agent template</p>
+          <textarea id="templateEditor" rows="10" placeholder="Store the prompt template used by this agent."></textarea>
+          <div class="panel-actions">
+            <button id="saveTemplate" class="primary">Save template</button>
+            <p id="templateStatus" class="hint"></p>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

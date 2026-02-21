@@ -3,7 +3,7 @@ services:
     image: node:20-alpine
     container_name: zerobitch-fleet
     working_dir: /app
-    command: ["sh", "-c", "echo 'ZeroBitch Fleet scaffold running on :4100'; while true; do sleep 3600; done"]
+    command: ["sh", "-c", "npm install --no-audit --no-fund && npm run start"]
     env_file:
       - .env
     ports:
